@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta charset="utf-8">
+		<title>TVDB</title>
+		<link rel="stylesheet" href="style.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+	</head>
+	<body>
+		<div id="app" class="row" v-cloak>
+			<ul class="sidenav sidenav-fixed">
+				<li>
+					<h3 class="center-align" style="padding-bottom: 20px;">TVDB</h3>
+				</li>
+				<li :class="{ selected: $route.name == $const.PAGE_HOME || ($route.name == $const.PAGE_USER_LIST && user.userID == $route.params.userID) }">
+					<router-link :to="user.userID != -1 ? '/user/' + user.userID + '/list/watching' : '/home'" class="waves-effect waves-purple">{{ strings.menu_home }}</router-link>
+				</li>
+				<li :class="{ selected: $route.name == $const.PAGE_SERIES || $route.name == $const.PAGE_SERIES_PAGE || $route.name == $const.PAGE_EPISODE_PAGE }">
+					<router-link class="waves-effect waves-purple" to="/series/any/any">{{ strings.menu_series }}</router-link>
+				</li>
+				<li :class="{ selected: $route.name == $const.PAGE_CHARACTERS || $route.name == $const.PAGE_CHARACTER_PAGE }">
+					<router-link class="waves-effect waves-purple" to="/characters">{{ strings.menu_characters }}</router-link>
+				</li>
+				<li :class="{ selected: $route.name == $const.PAGE_USERS || $route.name == $const.PAGE_USER_PAGE || ($route.name == $const.PAGE_USER_LIST && user.userID != $route.params.userID) }">
+					<router-link class="waves-effect waves-purple" to="/users">{{ strings.menu_users }}</router-link>
+				</li>
+				<li v-if="user.userID != -1">
+					<a class="waves-effect waves-purple" @click="selectUserLanguage">{{ strings.language }}</a>
+				</li>
+			</ul>
+			<div style="margin-left: 300px; padding: 16px;">
+				<router-view></router-view>
+			</div>
+
+			<div id="language-modal" class="modal">
+				<div class="modal-content">
+					<h5>{{ $root.strings.language_modal }}</h5>
+					<div class="collection">
+						<a v-for="language in languages" class="collection-item" :key="language.langID" @click="languageSelected(language.langID)">{{ language.name }}</a>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+				</div>
+			</div>
+			<div id="translate-modal" class="modal">
+				<div class="modal-content">
+					<textarea v-model="translateValue"></textarea>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+					<a class="waves-effect waves-purple btn-flat" @click="doTranslate">{{ $root.strings.translate_edit }}</a>
+				</div>
+			</div>
+			<div id="genre-modal" class="modal">
+				<div class="modal-content">
+					<div class="collection">
+						<a v-for="genre in genres" class="collection-item" :key="genre.genreID" @click="addGenre(genre.genreID)">{{ genre.name }}</a>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+				</div>
+			</div>
+			<div id="episode-modal" class="modal" style="height: 200px;">
+				<div class="modal-content">
+					<div class="input-field col s6">
+						<input step="0.5" id="episode-number-i" v-model="episodeNumber" type="number" class="validate">
+						<label for="episode-number-i">{{ $root.strings.episode_number }}</label>
+					</div>
+					<div class="input-field col s6">
+						<input id="episode-link-i" v-model="episodeLink" type="text">
+						<label for="episode-link-i">{{ $root.strings.link }}</label>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+					<a class="waves-effect waves-purple btn-flat" @click="addEpisode">{{ $root.strings.add }}</a>
+				</div>
+			</div>
+			<div id="character-modal" class="modal" style="height: 200px;">
+				<div class="modal-content">
+					<div class="input-field col s12">
+						<input step="1" id="character-id-i" v-model="characterID" type="number" class="validate">
+						<label for="character-id-i">{{ $root.strings.character_id }}</label>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+					<a class="waves-effect waves-purple btn-flat" @click="addCharacterSeries">{{ $root.strings.add }}</a>
+				</div>
+			</div>
+			<div id="relation-type-modal" class="modal" style="height: 400px;">
+				<div class="modal-content">
+					<div class="input-field col s12">
+						<div class="collection">
+							<a class="collection-item" @click="setRelationType(0)">{{ $root.strings.relation_prequel }}</a>
+							<a class="collection-item" @click="setRelationType(1)">{{ $root.strings.relation_sequel }}</a>
+							<a class="collection-item" @click="setRelationType(2)">{{ $root.strings.relation_alternative }}</a>
+							<a class="collection-item" @click="setRelationType(3)">{{ $root.strings.relation_other }}</a>
+						</div>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+				</div>
+			</div>
+			<div id="relation-modal" class="modal" style="height: 200px;">
+				<div class="modal-content">
+					<div class="input-field col s12">
+						<input step="1" id="seriesB-id-i" v-model="relationSeriesB" type="number" class="validate">
+						<label for="seriesB-id-i">{{ $root.strings.series_id }}</label>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+					<a class="waves-effect waves-purple btn-flat" @click="addRelation">{{ $root.strings.add }}</a>
+				</div>
+			</div>
+			<div id="series-language-modal" class="modal">
+				<div class="modal-content">
+					<h5>{{ $root.strings.language }}</h5>
+					<div class="collection">
+						<a v-for="language in languages" class="collection-item" :key="language.langID" @click="setSeriesLanguage(language.langID)">{{ language.name }}</a>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+				</div>
+			</div>
+			<div id="series-modal" class="modal" style="height: 200px;">
+				<div class="modal-content">
+					<div class="input-field col s6">
+						<input step="1" id="series-year-i" v-model="seriesYear" type="number" class="validate">
+						<label for="series-year-i">{{ $root.strings.year }}</label>
+					</div>
+					<div class="input-field col s6">
+						<input id="series-image-i" v-model="seriesImage" type="text">
+						<label for="series-image-i">{{ $root.strings.image_link }}</label>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+					<a class="waves-effect waves-purple btn-flat" @click="addSeries">{{ $root.strings.add }}</a>
+				</div>
+			</div>
+			<div id="character-add-modal" class="modal" style="height: 200px;">
+				<div class="modal-content">
+					<div class="input-field col s6">
+						<input id="character-birthday-i" v-model="characterBirthday" type="text">
+						<label for="character-birthday-i">{{ $root.strings.birthday }} (yyyy-mm-dd)</label>
+					</div>
+					<div class="input-field col s6">
+						<input id="character-image-i" v-model="characterImage" type="text">
+						<label for="character-image-i">{{ $root.strings.image_link }}</label>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+					<a class="waves-effect waves-purple btn-flat" @click="addCharacter">{{ $root.strings.add }}</a>
+				</div>
+			</div>
+			<div id="user-language-modal" class="modal">
+				<div class="modal-content">
+					<h5>{{ $root.strings.language }}</h5>
+					<div class="collection">
+						<a v-for="language in languages" class="collection-item" :key="language.langID" @click="setUserLanguage(language.langID)">{{ language.name }}</a>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<a class="modal-close waves-effect waves-purple btn-flat">{{ $root.strings.cancel }}</a>
+				</div>
+			</div>
+		</div>
+
+		<script type="text/x-template" id="series-list-template">
+			<div>
+				<div class="cols s12">
+					<select id="year-select" @change="switchYear($event)">
+						<option value="-1" selected>{{ $root.strings.year }}: {{ $root.strings.any }}</option>
+						<option v-for="year in Array(Math.ceil((2020 - 1950) / 1)).fill(1950).map((x, y) => x + y * 1)" :value="year">{{ year }}</option>
+					</select>
+					<select id="genre-select" @change="switchGenre($event)">
+						<option value="-1" selected>{{ $root.strings.genre }}: {{ $root.strings.any }}</option>
+						<option v-for="genre in $root.genres" :key="genre.genreID" :value="genre.genreID">{{ genre.name }}</option>
+					</select>
+				</div>
+				<div style='display: flex; flex-wrap: wrap;'>
+					<series-component v-for='entry in dataset' :series='entry' :small='false' :key='entry.seriesID' />
+					<div v-if="$root.user.role > 0" class="chip" @click="addSeries"><i class="material-icons">add</i></div>
+				</div>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="user-list-template">
+			<div>
+				<div class="col s10 offset-s1">
+					<ul class="row tabs z-depth-1">
+						<li class="tab col s-columns-5"><router-link :to="'/user/' + $route.params.userID + '/list/watching'" class="purple-text" :class="{ active: tab == $const.LIST_TAB_WATCHING }">{{ $root.strings.user_list_watching }}</router-link></li>
+						<li class="tab col s-columns-5"><router-link :to="'/user/' + $route.params.userID + '/list/finished'" class="purple-text" :class="{ active: tab == $const.LIST_TAB_FINISHED }">{{ $root.strings.user_list_finished }}</router-link></li>
+						<li class="tab col s-columns-5"><router-link :to="'/user/' + $route.params.userID + '/list/planned'" class="purple-text" :class="{ active: tab == $const.LIST_TAB_PLANNED }">{{ $root.strings.user_list_planned }}</router-link></li>
+						<li class="tab col s-columns-5"><router-link :to="'/user/' + $route.params.userID + '/list/on_hold'" class="purple-text" :class="{ active: tab == $const.LIST_TAB_ON_HOLD }">{{ $root.strings.user_list_on_hold }}</router-link></li>
+						<li class="tab col s-columns-5"><router-link :to="'/user/' + $route.params.userID + '/list/dropped'" class="purple-text" :class="{ active: tab == $const.LIST_TAB_DROPPED }">{{ $root.strings.user_list_dropped }}</router-link></li>
+					</ul>
+					<ul class="user-list">
+						<user-list-item v-for="(entry, index) in currentData" :entry="entry" :index="index" :key="entry.seriesID" />
+					</ul>
+				</div>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="user-list-item-template">
+			<li class="row">
+				<img class="col s1 tiny-image" :src="entry.image" @click="$parent.toSeries(entry.seriesID)">
+				<p class="col s4 truncate" style="line-height: 40px; vertical-align: center;" @click="$parent.toSeries(entry.seriesID)">{{ $root.prefer_native_names && entry.originalName != null ? entry.originalName : entry.name }}</p>
+				<div class="input-field col s3">
+					<select @change="$parent.move($event, index)">
+						<option value="0" :selected="$parent.tab == $const.LIST_TAB_WATCHING ? 'selected' : ''">{{ $root.strings.user_list_watching }}</option>
+						<option value="1" :selected="$parent.tab == $const.LIST_TAB_FINISHED ? 'selected' : ''">{{ $root.strings.user_list_finished }}</option>
+						<option value="2" :selected="$parent.tab == $const.LIST_TAB_PLANNED ? 'selected' : ''">{{ $root.strings.user_list_planned }}</option>
+						<option value="3" :selected="$parent.tab == $const.LIST_TAB_ON_HOLD ? 'selected' : ''">{{ $root.strings.user_list_on_hold }}</option>
+						<option value="4" :selected="$parent.tab == $const.LIST_TAB_DROPPED ? 'selected' : ''">{{ $root.strings.user_list_dropped }}</option>
+					</select>
+					<label>{{ $root.strings.user_list_state }}</label>
+				</div>
+				<div class="input-field col s1" style="height: 40px; margin: 15px 0px;">
+					<input v-if="$route.params.userID == $root.user.userID" type="number" step="1" :value="entry.progress" @change="updateValue('progress', $event, index)" style="line-height: 70px; text-align: right;">
+					<p v-if="$route.params.userID != $root.user.userID" style="text-align: right;">{{ entry.progress || 0.0 }}</p>
+				</div>
+				<div class="input-field col s1" style="height: 40px; margin: 15px 0px;">
+					<p> / {{ entry.episodes }}</p>
+				</div>
+				<div class="input-field col s1" style="height: 40px; margin: 15px 0px;">
+					<input v-if="$route.params.userID == $root.user.userID" type="number" step="0.1" :value="entry.rating || 0.0" @change="updateValue('rating', $event, index)" style="line-height: 70px; text-align: left;">
+					<p v-if="$route.params.userID != $root.user.userID" style="text-align: center;">{{ entry.rating || 0.0 }}</p>
+				</div>
+				<button v-if="$route.params.userID == $root.user.userID" class="col s1 waves-effect waves-purple btn-flat" style="height: 70px;" @click="remove(index)"><i class="material-icons right">delete</i></button>
+			</li>
+		</script>
+
+		<script type="text/x-template" id="series-component-template">
+			<div class="component" :style="series_image" :class="{ 'small': small }">
+				<p class="component_title" @click="toSeries">{{ $root.prefer_native_names && series.originalName != null ? series.originalName : series.name }}</p>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="character-component-template">
+			<div class="component" :style="character_image" :class="{ 'small': small }">
+				<p class="component_title" @click="toCharacter">{{ $root.prefer_native_names && character.originalName != null ? character.originalName : character.name }}</p>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="episode-component-template">
+			<div class="component wide" @click="toEpisode">
+				<p>{{ $root.strings.episode }} {{ episode.number }}</p>
+				<p class="truncate" style="font-weight: 600; margin-left: 5px; margin-right: 5px;">{{ $root.prefer_native_names && episode.originalName != null ? episode.originalName : episode.name }}</p>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="user-component-template">
+			<div class="component square" :style="user_image">
+				<p class="component_title" @click="toUser">{{ user.username }}</p>
+			</div>
+		</script>
+		
+		<script type="text/x-template" id="series-page-template">
+			<div>
+				<div class="col s12">
+					<div class="col s9">
+						<div class="col s4 center-align">
+							<img class="materialboxed" style="width: 100%" :src="series.image">
+							<button v-if="$root.user.userID != -1" class="waves-effect waves-purple btn purple lighten-1" style="margin-top: 15px;" @click="addOrEdit">{{ inList ? $root.strings.edit_series + " [" + listPlace + "]" : $root.strings.add_series }}</button>
+						</div>
+						<div class="col s8" style="padding-left: 30px;">
+							<h4 style="margin: 0px;">{{ $root.prefer_native_names && series.originalName != null ? series.originalName : series.name }}<span v-if="$root.user.role > 0" class="translate-link">&nbsp;<a @click="$root.translate(series.seriesID, 0)">[{{ $root.strings.translate_edit }}]</a></span></h4>
+							<p v-if="series.originalName != null && !$root.prefer_native_names" style="margin: 5px 5px; color: #555555;">{{ series.originalName }}</p>
+							<p style="margin: 30px 0px; text-align: block;">{{ series.description }}<span v-if="$root.user.role > 0" class="translate-link"><br /><a @click="$root.translate(series.seriesID, 1)">[{{ $root.strings.translate_edit }}]</a></span></p>
+							<label style="font-size: 14px;">{{ $root.strings.summary }}: <a @click="showSummary = !showSummary">[{{ showSummary ? $root.strings.collapse : $root.strings.expand }}]</a></label>
+							<p v-if="showSummary" style="margin: 10px 0px; text-align: block;">{{ series.summary }}<span v-if="$root.user.role > 0"><br /><a @click="$root.translate(series.seriesID, 2)" class="translate-link">[{{ $root.strings.translate_edit }}]</a></span></p>
+						</div>
+					</div>
+					<div class="col s3">
+						<h5>{{ $root.strings.info }}</h5>
+						<label>{{ $root.strings.genres }}</label>
+						<div style="margin: 6px 0px;">
+							<div v-for="genre in series.genres" class="chip" :key="genre.genreID"><span @click="$router.push('/series/any/' + genre.genreID)">{{ genre.name }}</span><i v-if="$root.user.role > 0" @click="removeGenre(genre.genreID)" class="close material-icons">close</i></div>
+							<div v-if="$root.user.role > 0" class="chip" @click="addGenre"><i class="material-icons">add</i></div>
+						</div>
+						<label>{{ $root.strings.year }}</label>
+						<p class="series-year" style="margin: 0px 5px;" @click="$router.push('/series/' + series.year + '/any')">{{ series.year }}</p>
+						<label>{{ $root.strings.rating }}</label>
+						<p style="margin: 0px 5px;">{{ series.rating }}</p>
+						<label>{{ $root.strings.stats }}</label>
+						<p style="margin: 0px 5px;"><span style="color: #666;">{{ $root.strings.user_list_watching }}:</span> {{ series.stats.watching || 0 }}</p>
+						<p style="margin: 0px 5px;"><span style="color: #666;">{{ $root.strings.user_list_finished }}:</span> {{ series.stats.finished || 0 }}</p>
+						<p style="margin: 0px 5px;"><span style="color: #666;">{{ $root.strings.user_list_planned }}:</span> {{ series.stats.planned || 0 }}</p>
+						<p style="margin: 0px 5px;"><span style="color: #666;">{{ $root.strings.user_list_on_hold }}:</span> {{ series.stats.on_hold || 0 }}</p>
+						<p style="margin: 0px 5px;"><span style="color: #666;">{{ $root.strings.user_list_dropped }}:</span> {{ series.stats.dropped || 0 }}</p>
+						<button v-if="$root.user.role > 0" class="waves-effect waves-purple btn purple lighten-1" style="margin-top: 15px;" @click="remove">{{ $root.strings.delete }}</button>
+					</div>
+				</div>
+				<div style="margin-top: 30px;" class="divider col s12"></div>
+				<div class="col s12">
+					<h5>{{ $root.strings.relations }}</h5>
+					<div style="display: flex; flex-wrap: wrap; text-align: center;">
+						<div v-for="entry in series.relations.prequel" :key="entry.seriesID">
+							<series-component :series="entry" :small="true" />
+							{{ $root.strings.relation_prequel }}
+							<span v-if="$root.user.role > 0" class="translate-link"><br /><a @click="removeRelation(entry.seriesID)">[{{ $root.strings.delete }}]</a></span>
+						</div>
+						<div v-for="entry in series.relations.sequel" :key="entry.seriesID">
+							<series-component :series="entry" :small="true" />
+							{{ $root.strings.relation_sequel }}
+							<span v-if="$root.user.role > 0" class="translate-link"><br /><a @click="removeRelation(entry.seriesID)">[{{ $root.strings.delete }}]</a></span>
+						</div>
+						<div v-for="entry in series.relations.alternative" :key="entry.seriesID">
+							<series-component :series="entry" :small="true" />
+							{{ $root.strings.relation_alternative }}
+							<span v-if="$root.user.role > 0" class="translate-link"><br /><a @click="removeRelation(entry.seriesID)">[{{ $root.strings.delete }}]</a></span>
+						</div>
+						<div v-for="entry in series.relations.other" :key="entry.seriesID">
+							<series-component :series="entry" :small="true" />
+							{{ $root.strings.relation_other }}
+							<span v-if="$root.user.role > 0" class="translate-link"><br /><a @click="removeRelation(entry.seriesID)">[{{ $root.strings.delete }}]</a></span>
+						</div>
+						<div v-if="$root.user.role > 0" class="chip" @click="addRelation"><i class="material-icons">add</i></div>
+					</div>
+				</div>
+				<div class="col s12">
+					<h5>{{ $root.strings.menu_characters }}</h5>
+					<div style="display: flex; flex-wrap: wrap; text-align: center;">
+						<div v-for="entry in series.characters" :key="entry.characterID">
+							<character-component :character="entry" :small="true" />
+							<span v-if="$root.user.role > 0" class="translate-link"><a @click="removeCharacter(entry.characterID)">[{{ $root.strings.delete }}]</a></span>
+						</div>
+						<div v-if="$root.user.role > 0" class="chip" @click="addCharacter"><i class="material-icons">add</i></div>
+					</div>
+				</div>
+				<div class="col s12">
+					<h5>{{ $root.strings.episodes }}</h5>
+					<div style="display: flex; flex-wrap: wrap; text-align: center;">
+						<episode-component v-for="entry in series.episodes" :key="entry.episodeID" :episode="entry" />
+						<div v-if="$root.user.role > 0" class="chip" @click="addEpisode"><i class="material-icons">add</i></div>
+					</div>
+				</div>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="character-page-template">
+			<div>
+				<div class="col s12">
+					<div class="col s9">
+						<div class="col s4 center-align">
+							<img class="materialboxed" style="width: 100%" :src="character.image">
+						</div>
+						<div class="col s8" style="padding-left: 30px;">
+							<h4 style="margin: 0px;">{{ $root.prefer_native_names && character.originalName != null ? character.originalName : character.name }}<span v-if="$root.user.role > 0" class="translate-link">&nbsp;<a @click="$root.translate(character.characterID, 5)">[{{ $root.strings.translate_edit }}]</a></span></h4>
+							<p v-if="character.originalName != null && !$root.prefer_native_names" style="margin: 5px 5px; color: #555555;">{{ character.originalName }}</p>
+							<p style="margin: 30px 0px; text-align: block;">{{ character.description }}<span v-if="$root.user.role > 0" class="translate-link"><br /><a @click="$root.translate(character.characterID, 6)">[{{ $root.strings.translate_edit }}]</a></span></p>
+						</div>
+					</div>
+					<div class="col s3">
+						<h5>{{ $root.strings.info }}</h5>
+						<label>{{ $root.strings.birthday }}</label>
+						<p style="margin: 0px 5px;">{{ character.birthday }}</p>
+						<label>{{ $root.strings.menu_series }}</label>
+						<div style="display: flex; flex-wrap: wrap; text-align: center; margin: 0px 5px;">
+							<series-component v-for="entry in character.series" :key="entry.seriesID" :series="entry" :small="true" />
+						</div>
+						<button v-if="$root.user.role > 0" class="waves-effect waves-purple btn purple lighten-1" style="margin-top: 15px;" @click="remove">{{ $root.strings.delete }}</button>
+					</div>
+				</div>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="episode-page-template">
+			<div>
+				<div class="col s9" style="padding-left: 30px;">
+					<h4 style="margin: 0px;"><strong>{{ $root.strings.episode }} {{ episode.number }}</strong>: {{ $root.prefer_native_names && episode.originalName != null ? episode.originalName : episode.name }}<span v-if="$root.user.role > 0" class="translate-link">&nbsp;<a @click="$root.translate(episode.episodeID, 3)">[{{ $root.strings.translate_edit }}]</a></span></h4>
+					<p v-if="episode.originalName != null && !$root.prefer_native_names" style="margin: 5px 5px; color: #555555;">{{ episode.originalName }}</p>
+					<p style="margin: 30px 0px; text-align: block;">{{ episode.description }}<span v-if="$root.user.role > 0" class="translate-link"><br /><a @click="$root.translate(episode.episodeID, 4)">[{{ $root.strings.translate_edit }}]</a></span></p>
+				</div>
+				<div class="col s3">
+					<h5>{{ $root.strings.info }}</h5>
+					<label v-if="episode.link != null">{{ $root.strings.link }}</label>
+					<a v-if="episode.link != null" :href="episode.link" style="margin: 0px 5px;" class="truncate" target="_blank">{{ episode.link }}</a>
+					<label>{{ $root.strings.menu_series }}</label>
+					<div style="display: flex; flex-wrap: wrap; text-align: center; margin: 0px 5px;">
+						<series-component :series="episode.series" :small="true" />
+					</div>
+					<button v-if="$root.user.role > 0" class="waves-effect waves-purple btn purple lighten-1" style="margin-top: 15px;" @click="remove">{{ $root.strings.delete }}</button>
+				</div>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="profile-template">
+			<div>
+				<div class="col s12">
+					<div class="col s9">
+						<div class="col s4 center-align">
+							<img class="materialboxed" style="width: 100%" :src="user.avatar">
+						</div>
+						<div class="col s8" style="padding-left: 30px;">
+							<h4 style="margin: 0px;">{{ user.username }}</h4>
+							<p style="margin: 30px 0px; text-align: block;">{{ user.profileDesc }}</p>
+						</div>
+					</div>
+					<div class="col s3">
+						<h5>{{ $root.strings.info }}</h5>
+						<router-link :to="'/user/' + user.userID + '/list/watching'" class="waves-effect waves-purple btn purple lighten-1">{{ $root.strings.list }}</router-link><br />
+						<label>{{ $root.strings.language }}</label>
+						<p style="margin: 0px 5px;">{{ user.language }}</p>
+						<label>{{ $root.strings.genres }}</label>
+						<div style="margin: 6px 0px;">
+							<div v-for="genre in user.genres" class="chip" @click="$router.push('/series/any/' + genre.genreID)" :key="genre.genreID">{{ genre.name }}</div>
+						</div>
+					</div>
+				</div>
+				<div style="margin-top: 30px;" class="divider col s12"></div>
+				<div class="col s12">
+					<h5>{{ $root.strings.menu_series }}</h5>
+					<div style="display: flex; flex-wrap: wrap; text-align: center;">
+						<series-component v-for="entry in user.series" :key="entry.seriesID" :series="entry" :small="true" />
+					</div>
+				</div>
+			</div>
+		</script>
+
+		<script type="text/x-template" id="home-template">
+			<div class="valign-wrapper center-align" style="min-height: calc(100vh - 60px); z-index: 1000;">
+				<div class="col s6 offset-s3">
+					<div class="card purple">
+						<div class="card-content white-text">
+							<span class="card-title"><strong>{{ $root.strings.login }}</strong></span>
+							<div class="input-field">
+								<input type="text" class="white-text" v-model="username" id="login_username">
+								<label for="login_username">{{ $root.strings.login_username }}</label>
+							</div>
+							<div class="input-field">
+								<input type="password" class="white-text" v-model="password" id="login_password">
+								<label for="login_password">{{ $root.strings.login_password }}</label>
+							</div>
+						</div>
+						<div class="card-action">
+							<a @click="register">{{ $root.strings.register }}</a>
+							<a @click="login">{{ $root.strings.do_login }}</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		</script>
+		
+		<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script> <!-- replace with production version https://cdn.jsdelivr.net/npm/vue (-router) -->
+		<script src="https://cdn.jsdelivr.net/npm/vue-router/dist/vue-router.js"></script>
+		<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.7.0/qs.min.js"></script>
+		<script src="main.js"></script>
+	</body>
+</html>
